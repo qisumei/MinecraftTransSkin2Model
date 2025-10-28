@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -26,6 +26,7 @@ namespace TransSkin2Model
             outb("生成材质包目录需将已生成的文件和已有皮肤放在相同目录下，会自动识别！");
             outb("皮肤文件名称需要更改为skin.png「粗胳膊」和skin_sin.png「细胳膊」！");
             outb("此外请不要在选择的目录下存放名为temp的文件夹，否则将会被删除！");
+            outb("现在支持按住 Shift 或 Ctrl 多选文件进行批量处理！"); // 新增提示
         }
 
         //每个第二层区域所对应的点和宽高：
@@ -155,7 +156,7 @@ namespace TransSkin2Model
                     steveOrAlex = false;
                 }
                 isMakePack = true;
-                saveFileFun(isMakePack, whichMode, steveOrAlex, "");
+                saveFileFun(isMakePack, whichMode, steveOrAlex, "", "");
             }
             else if (modeSelect.SelectedIndex == 0)
             {
@@ -163,46 +164,70 @@ namespace TransSkin2Model
             }
             else
             {
+                // 创建并配置 OpenFileDialog - 支持多选
                 OpenFileDialog fdia = new OpenFileDialog();
-                fdia.Title = "请选择皮肤文件，注意是64*64的尺寸！";
+                fdia.Title = "请选择一个或多个皮肤文件(按住Shift或Ctrl多选)，注意是64*64的尺寸！";
                 fdia.Filter = "PNG图片文件|*.png|所有文件|*.*";
                 fdia.RestoreDirectory = true;
                 fdia.FilterIndex = 0;
+                fdia.Multiselect = true; // 允许多选
+
                 if (fdia.ShowDialog() == DialogResult.OK)
                 {
-                    string fileName = fdia.FileName;
-                    Bitmap pic = new Bitmap(fileName);
-                    if (pic.Width == 64 && pic.Height == 64)
+                    // 获取选中的所有文件名
+                    string[] fileNames = fdia.FileNames;
+                    bool isBatchMode = fileNames.Length > 1; // 判断是否为批量模式
+
+                    // 循环处理每个选中的文件
+                    foreach (string fileName in fileNames)
                     {
-                        if (isAlex.Checked == true)
+                        try
                         {
-                            steveOrAlex = false;
+                            Bitmap pic = new Bitmap(fileName);
+                            if (pic.Width == 64 && pic.Height == 64)
+                            {
+                                // 获取原始文件名（不含路径和扩展名）用于加前缀
+                                string originalFileNameWithoutExtension = Path.GetFileNameWithoutExtension(fileName);
+
+                                if (isAlex.Checked == true)
+                                {
+                                    steveOrAlex = false;
+                                }
+                                else
+                                {
+                                    steveOrAlex = true;
+                                }
+                                //检测选项
+                                if (modeSelect.SelectedIndex == 1)
+                                {
+                                    whichMode = true;
+                                    secondStep(isMakePack, steveOrAlex, whichMode, pic, fileName, isBatchMode ? originalFileNameWithoutExtension : "");
+                                }
+                                else if (modeSelect.SelectedIndex == 2)
+                                {
+                                    whichMode = false;
+                                    secondStep(isMakePack, steveOrAlex, whichMode, pic, fileName, isBatchMode ? originalFileNameWithoutExtension : "");
+                                }
+                                else
+                                {
+                                    outb($"文件 {Path.GetFileName(fileName)} 的模式选择错误！跳过。");
+                                }
+                            }
+                            else
+                            {
+                                outb($"皮肤图片 {Path.GetFileName(fileName)} 非标准皮肤格式尺寸64*64！跳过。");
+                            }
+                            pic.Dispose();
                         }
-                        else
+                        catch (Exception ex)
                         {
-                            steveOrAlex = true;
-                        }
-                        //检测选项
-                        if (modeSelect.SelectedIndex == 1)
-                        {
-                            whichMode = true;
-                            secondStep(isMakePack, steveOrAlex, whichMode, pic, fileName);
-                        }
-                        else if (modeSelect.SelectedIndex == 2)
-                        {
-                            whichMode = false;
-                            secondStep(isMakePack, steveOrAlex, whichMode, pic, fileName);
-                        }
-                        else
-                        {
-                            outb("错误的模式！程序中断。");
+                            outb($"处理文件 {Path.GetFileName(fileName)} 时发生错误: {ex.Message}");
                         }
                     }
-                    else
+                    if (isBatchMode)
                     {
-                        outb("皮肤图片非标准皮肤格式尺寸64*64！");
+                        outb("批量处理完成！");
                     }
-                    pic.Dispose();
                 }
             }
         }
@@ -254,7 +279,7 @@ namespace TransSkin2Model
         elements.Add(tempa);
         string temp = elements.ToString();
         */
-        private void secondStep(bool isMakePack, bool steveOrAlex, bool whichMode, Bitmap pic, string fileName) 
+        private void secondStep(bool isMakePack, bool steveOrAlex, bool whichMode, Bitmap pic, string fileName, string originalFileNamePrefix) 
         {
             if (whichMode == false)
             {
@@ -263,48 +288,49 @@ namespace TransSkin2Model
                     //Application.Exit();
                 }
             }
-            //else
-            //{
-                outputBox.Text = "[" + DateTime.Now.ToShortDateString() + " " + DateTime.Now.ToShortTimeString() + "] " + "初始化完毕……";
-                JObject allText = (JObject)JsonConvert.DeserializeObject("{}");
-                if (whichMode == true)
+
+            outputBox.Text = ""; // 清空输出框以便显示当前文件的处理信息
+            outb($"开始处理文件: {Path.GetFileName(fileName)} ...");
+            outb("初始化完毕……");
+            JObject allText = (JObject)JsonConvert.DeserializeObject("{}");
+            if (whichMode == true)
+            {
+                if (steveOrAlex == true)
                 {
-                    if (steveOrAlex == true)
-                    {
-                        //Steve
-                        allText = (JObject)JsonConvert.DeserializeObject(Properties.Resources.SkinJson_Nor);
-                    }
-                    else
-                    {
-                        //Alex
-                        allText = (JObject)JsonConvert.DeserializeObject(Properties.Resources.SkinJson_Sin);
-                    }
+                    //Steve
+                    allText = (JObject)JsonConvert.DeserializeObject(Properties.Resources.SkinJson_Nor);
                 }
                 else
                 {
-                    if (steveOrAlex == true)
-                    {
-                        //Steve
-                        allText = (JObject)JsonConvert.DeserializeObject(Properties.Resources.MiniSkinJson_Nor);
-                    }
-                    else
-                    {
-                        //Alex
-                        allText = (JObject)JsonConvert.DeserializeObject(Properties.Resources.MiniSkinJson_Sin);
-                    }
+                    //Alex
+                    allText = (JObject)JsonConvert.DeserializeObject(Properties.Resources.SkinJson_Sin);
                 }
-                string elementsText = allText["elements"].ToString();
-                JArray elements = (JArray)JsonConvert.DeserializeObject(elementsText);
+            }
+            else
+            {
+                if (steveOrAlex == true)
+                {
+                    //Steve
+                    allText = (JObject)JsonConvert.DeserializeObject(Properties.Resources.MiniSkinJson_Nor);
+                }
+                else
+                {
+                    //Alex
+                    allText = (JObject)JsonConvert.DeserializeObject(Properties.Resources.MiniSkinJson_Sin);
+                }
+            }
+            string elementsText = allText["elements"].ToString();
+            JArray elements = (JArray)JsonConvert.DeserializeObject(elementsText);
 
-                flushElements(pic, elements, steveOrAlex, whichMode);
-                allText["elements"] = elements;
-                string writeOut = allText.ToString();
+            flushElements(pic, elements, steveOrAlex, whichMode);
+            allText["elements"] = elements;
+            string writeOut = allText.ToString();
 
-                saveFileFun(isMakePack, whichMode, steveOrAlex, writeOut);
-            //}
+            saveFileFun(isMakePack, whichMode, steveOrAlex, writeOut, originalFileNamePrefix);
+            outb($"文件 {Path.GetFileName(fileName)} 处理完成。");
         }
 
-        private void saveFileFun(bool isMakePack, bool whichMode, bool steveOrAlex, string saveStr)
+        private void saveFileFun(bool isMakePack, bool whichMode, bool steveOrAlex, string saveStr, string originalFileNamePrefix)
         {
             if (isMakePack)
             {
@@ -375,38 +401,43 @@ namespace TransSkin2Model
             }
             else
             {
-                //生成普通文件
-                FolderBrowserDialog fbd = new FolderBrowserDialog();
-                fbd.Description = "保存为json文件……请选择文件夹，将自动生成文件！";
-                if (fbd.ShowDialog() == DialogResult.OK)
+                // 如果是批量模式且传入了原始文件名前缀，则使用前缀
+                string fileNamePrefix = string.IsNullOrEmpty(originalFileNamePrefix) ? "" : originalFileNamePrefix + "_";
+
+                string targetFileName = "";
+                // 根据模式和模型类型确定基础文件名
+                if (whichMode) // 普通两格高
                 {
-                    if (whichMode)
+                    targetFileName = steveOrAlex ? "spruce_stairs.json" : "birch_stairs.json";
+                }
+                else // 大头娃娃
+                {
+                    targetFileName = steveOrAlex ? "sandstone_stairs.json" : "jungle_stairs.json";
+                }
+
+                // 拼接最终文件名
+                string finalFileName = fileNamePrefix + targetFileName;
+
+                // 选择保存文件夹
+                SaveFileDialog sfd = new SaveFileDialog();
+                sfd.Title = "保存模型文件...";
+                sfd.Filter = "JSON 文件|*.json";
+                sfd.FileName = finalFileName;
+
+                if (sfd.ShowDialog() == DialogResult.OK)
+                {
+                    try
                     {
-                        //普通两格高
-                        if (steveOrAlex)
+                        File.WriteAllText(sfd.FileName, saveStr, Encoding.ASCII);
+                        // 在 outputBox 中提示保存成功（单个文件处理时）
+                        if (string.IsNullOrEmpty(originalFileNamePrefix))
                         {
-                            //steve
-                            File.WriteAllText(fbd.SelectedPath + "/spruce_stairs.json", saveStr, Encoding.ASCII);
-                        }
-                        else
-                        {
-                            //alex
-                            File.WriteAllText(fbd.SelectedPath + "/birch_stairs.json", saveStr, Encoding.ASCII);
+                           outb($"文件已保存到: {sfd.FileName}");
                         }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        //大头娃娃
-                        if (steveOrAlex)
-                        {
-                            //steve
-                            File.WriteAllText(fbd.SelectedPath + "/sandstone_stairs.json", saveStr, Encoding.ASCII);
-                        }
-                        else
-                        {
-                            //alex
-                            File.WriteAllText(fbd.SelectedPath + "/jungle_stairs.json", saveStr, Encoding.ASCII);
-                        }
+                        MessageBox.Show($"保存文件 {sfd.FileName} 失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 }
             }
@@ -1108,7 +1139,16 @@ namespace TransSkin2Model
 
         private void outb(string text2out)
         {
-            outputBox.Text += "\r\n[" + DateTime.Now.ToShortDateString() + " " + DateTime.Now.ToShortTimeString() + "] " + text2out;
+            // 在UI线程上更新文本框内容，防止跨线程访问异常
+            if (outputBox.InvokeRequired)
+            {
+                outputBox.Invoke(new Action<string>(outb), text2out);
+            }
+            else
+            {
+                outputBox.AppendText("\r\n[" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "] " + text2out);
+                outputBox.ScrollToCaret(); // 滚动到底部
+            }
         }
 
         //会丢失透明度，弃用
