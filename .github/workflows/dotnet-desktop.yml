@@ -10,44 +10,52 @@ jobs:
   build:
     strategy:
       matrix:
-        configuration: [Debug, Release] # 可以只保留 Release，如果不需要 Debug 构建
+        configuration: [Release] # 通常 CI/CD 只构建 Release 版本
 
-    runs-on: windows-latest # .NET Framework 需要 Windows 环境
+    runs-on: windows-latest
 
     env:
-      Solution_Name: TransSkin2Model.sln # 直接设置正确的解决方案文件名
+      Solution_Name: TransSkin2Model.sln
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0 # 获取所有历史记录，以备将来可能需要
+        fetch-depth: 0
 
-    # 安装 NuGet CLI - MSBuild 可能需要它来还原旧格式的 packages.config
+    # 1. 安装 .NET Framework 4.5 Developer Pack (Targeting Pack + SDK)
+    # 使用 Chocolatey 安装。可能需要接受许可。
+    # 如果 4.5 不可用，尝试稍高兼容版本如 4.5.2
+    - name: Install .NET Framework 4.5 Developer Pack
+      shell: pwsh # 使用 PowerShell
+      run: |
+        choco install dotnetfx-4.5-dev -y --ignore-checksums
+        # 如果上面失败，可以尝试 4.5.2:
+        # choco install dotnetfx-4.5.2-dev -y --ignore-checksums
+        # 确认环境变量更新 (虽然 choco 通常会处理)
+        refreshenv
+
+    # 2. 安装 NuGet CLI
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v2
       with:
-        nuget-version: 'latest' # 使用最新稳定版的 NuGet CLI
+        nuget-version: 'latest'
 
-    # 添加 MSBuild 到 PATH
+    # 3. 添加 MSBuild 到 PATH
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    # 还原 NuGet 包 (使用 NuGet CLI，更兼容 packages.config)
+    # 4. 还原 NuGet 包
     - name: Restore NuGet packages
       run: nuget restore $env:Solution_Name
 
-    # 构建解决方案
-    # 使用 MSBuild 构建 .NET Framework 项目
+    # 5. 构建解决方案
     - name: Build solution
       run: msbuild $env:Solution_Name /p:Configuration=${{ matrix.configuration }}
 
-    # (可选) 上传构建产物 (例如 .exe 文件)
-    # 如果你想在 Actions 页面下载编译好的程序，可以添加这个步骤
+    # (可选) 6. 上传构建产物
     - name: Upload build artifacts (Optional)
       uses: actions/upload-artifact@v4
       with:
-        name: TransSkin2Model-${{ matrix.configuration }} # 为不同配置命名
-        # 注意: 路径可能需要根据实际编译输出调整
-        # 通常 .exe 在 SolutionDir/ProjectDir/bin/Configuration/ 目录下
-        path: TransSkin2Model/bin/${{ matrix.configuration }}/TransSkin2Model.exe
+        name: TransSkin2Model-${{ matrix.configuration }}
+        path: TransSkin2Model/bin/${{ matrix.configuration }}/TransSkin2Model.exe # 请确认此路径是否正确
